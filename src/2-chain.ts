@@ -5,13 +5,14 @@ import { PromptTemplate } from "@langchain/core/prompts";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // ============================================================
@@ -45,9 +46,9 @@ const chain = prompt.pipe(llm);
 //   1. prompt：把 {role, limit, question} 注入模板 → 生成完整提示词字符串
 //   2. llm：接收提示词字符串 → 调用模型 API → 返回 AIMessage
 const res = await chain.invoke({
-  role: "前端面试官",
-  limit: "50",
-  question: "什么是闭包",
+    role: "前端面试官",
+    limit: "50",
+    question: "什么是闭包",
 });
 
 console.log("链式调用结果:", res.content);

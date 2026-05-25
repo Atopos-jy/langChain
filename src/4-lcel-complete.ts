@@ -1,21 +1,23 @@
 import dotenv from "dotenv";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
+import { RunnablePassthrough } from "@langchain/core/runnables";
 import {
-  StringOutputParser,
-  JsonOutputParser,
+    StringOutputParser,
+    JsonOutputParser,
 } from "@langchain/core/output_parsers";
 
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // ============================================================
@@ -36,12 +38,35 @@ const prompt = PromptTemplate.fromTemplate("用一句话解释：{topic}");
 //  解析器：将模型输出转换为字符串
 const parser = new StringOutputParser();
 
-const chain = prompt.pipe(llm).pipe(parser);
+// const chain = prompt.pipe(llm).pipe(parser);
+// 定义一个泛型函数，日志节点不改变数据形状，所以输入输出类型相同
+function createLogger<T>(label: string) {
+    return new RunnablePassthrough<T>({
+        func: (input: T) => {
+            console.log(`[${label}] 输入:`, JSON.stringify(input, null, 2));
+            return input; // 原样返回，不影响后续节点
+        },
+    });
+}
 
-const result = await chain.invoke({ topic: "闭包" });
+// 使用方式（假设你的 prompt 期望的输入类型是 { topic: string }）
+type ChainInput = { topic: string };
+
+const chain = createLogger<ChainInput>("原始输入")
+    .pipe(prompt)
+    .pipe(createLogger("prompt 格式化后"))
+    .pipe(llm)
+    .pipe(createLogger("LLM 原始输出"))
+    .pipe(parser)
+    .pipe(createLogger("parser 最终输出"));
+
+const result = await chain.stream({ topic: "闭包" });
 
 console.log("类型：", typeof result);
 console.log("结果：", result);
+for await (const chunk of result) {
+    console.log(chunk); // 每次打印模型生成的一小段文本（可能是几个字）
+}
 
 // ============================================================
 // JsonOutputParser：将模型输出解析为 JSON 对象

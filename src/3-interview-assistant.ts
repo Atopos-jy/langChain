@@ -5,13 +5,14 @@ import { PromptTemplate } from "@langchain/core/prompts";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // ============================================================
@@ -31,9 +32,9 @@ const chain = prompt.pipe(llm);
 
 // 前端面试
 const res1 = await chain.invoke({
-  role: "前端面试官",
-  question: "什么是闭包",
-  limit: "80",
+    role: "前端面试官",
+    question: "什么是闭包",
+    limit: "80",
 });
 
 console.log("--- 前端面试 ---");
@@ -41,9 +42,9 @@ console.log(res1.content);
 
 // 后端面试：同一个模板，切换角色即可复用
 const res2 = await chain.invoke({
-  role: "后端面试官",
-  question: "什么是微服务架构",
-  limit: "80",
+    role: "后端面试官",
+    question: "什么是微服务架构",
+    limit: "80",
 });
 
 console.log("\n--- 后端面试 ---");

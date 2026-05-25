@@ -5,13 +5,14 @@ import { PromptTemplate } from "@langchain/core/prompts";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // ============================================================
@@ -28,9 +29,9 @@ const prompt = PromptTemplate.fromTemplate(`
 
 // 使用 format 注入数据，生成最终的提示词字符串
 const promptStr = await prompt.format({
-  role: "前端面试官",
-  limit: "50",
-  question: "什么是闭包",
+    role: "前端面试官",
+    limit: "50",
+    question: "什么是闭包",
 });
 
 console.log("--- 生成的提示词 ---");
@@ -43,9 +44,9 @@ console.log(res.content);
 
 // 同一个模板，切换角色和问题即可复用，无需复制 prompt
 const promptStr2 = await prompt.format({
-  role: "后端面试官",
-  limit: "100",
-  question: "什么是事务",
+    role: "后端面试官",
+    limit: "100",
+    question: "什么是事务",
 });
 
 console.log("\n--- 复用模板，切换后端角色和提示词 ---");
