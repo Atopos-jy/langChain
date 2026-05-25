@@ -1,30 +1,27 @@
 import dotenv from "dotenv";
 import { ChatOpenAI } from "@langchain/openai";
-import {
-  HumanMessage,
-  SystemMessage,
-} from "@langchain/core/messages";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // 标准消息格式调用
 const conversation = [
-  // 系统消息
-  new SystemMessage(
-    "你是一个智能助手，你会根据用户的问题回答用户的问题，直接回答不知道."
-  ),
-  // 用户消息
-  new HumanMessage("世界上最高的山峰是哪座？"),
+    // 系统消息
+    new SystemMessage(
+        "你是一个智能助手，你会根据用户的问题回答用户的问题，直接回答不知道.",
+    ),
+    // 用户消息
+    new HumanMessage("世界上最高的山峰是哪座？"),
 ];
 
 // 助手消息（invoke是异步方法，用来调用大模型）
