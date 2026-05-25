@@ -4,17 +4,14 @@ import { ChatOpenAI } from "@langchain/openai";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false, // 是否开启流式返回，默认 false
-  // maxTokens: 1000, // 最大Tokens
-  // maxRetries: 6, // 最大重试次数
-  // timeout: undefined, // 超时时间
-  logprobs: true,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // 打印创建大模型对象

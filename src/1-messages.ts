@@ -1,21 +1,22 @@
 import dotenv from "dotenv";
 import { ChatOpenAI } from "@langchain/openai";
 import {
-  HumanMessage,
-  SystemMessage,
-  AIMessage,
+    HumanMessage,
+    SystemMessage,
+    AIMessage,
 } from "@langchain/core/messages";
 
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "mimo-v2.5-pro",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+    },
 });
 
 // 多轮对话示例：通过注入历史消息，让模型记住之前的对话上下文
@@ -29,11 +30,10 @@ const messages = [systemMsg, humanMsg1, aiMessage, humanMsg2];
 const response = await llm.invoke(messages);
 console.log(response.content);
 
-
 // 也可以直接传原始对象数组（效果与上面使用消息类完全相同）
 const rawMessages = [
-  { role: "system" as const, content: "你是一个诗人" },
-  { role: "user" as const, content: "写一首关于春天的俳句" },
+    { role: "system" as const, content: "你是一个诗人" },
+    { role: "user" as const, content: "写一首关于春天的俳句" },
 ];
 const poemResponse = await llm.invoke(rawMessages);
 console.log("\n--- 原始对象写法 ---");
