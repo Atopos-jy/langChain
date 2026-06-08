@@ -7,13 +7,14 @@ import { StringOutputParser } from "@langchain/core/output_parsers";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  },
+    model: "deepseek-v4-flash",
+    apiKey: process.env.MiMo_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000, // 30秒超时，避免无限等待
+    configuration: {
+        baseURL: "https://api.deepseek.com",
+    },
 });
 
 const parser = new StringOutputParser();
@@ -83,33 +84,33 @@ const formatChain = formatPrompt.pipe(llm).pipe(parser);
 // ============================================================
 
 const fullChain = RunnableSequence.from([
-  // Step 1：生成解释
-  async (input: { topic: string }) => {
-    const explanation = await explainChain.invoke({
-      topic: input.topic,
-    });
-    return { explanation };
-  },
+    // Step 1：生成解释
+    async (input: { topic: string }) => {
+        const explanation = await explainChain.invoke({
+            topic: input.topic,
+        });
+        return { explanation };
+    },
 
-  // Step 2：生成总结（基于 explanation）
-  async (data: { explanation: string }) => {
-    const summary = await summaryChain.invoke({
-      explanation: data.explanation,
-    });
-    return {
-      explanation: data.explanation,
-      summary,
-    };
-  },
+    // Step 2：生成总结（基于 explanation）
+    async (data: { explanation: string }) => {
+        const summary = await summaryChain.invoke({
+            explanation: data.explanation,
+        });
+        return {
+            explanation: data.explanation,
+            summary,
+        };
+    },
 
-  // Step 3：结构化输出
-  async (data: { explanation: string; summary: string }) => {
-    const json = await formatChain.invoke({
-      explanation: data.explanation,
-      summary: data.summary,
-    });
-    return json;
-  },
+    // Step 3：结构化输出
+    async (data: { explanation: string; summary: string }) => {
+        const json = await formatChain.invoke({
+            explanation: data.explanation,
+            summary: data.summary,
+        });
+        return json;
+    },
 ]);
 
 // ---------- 执行 ----------
