@@ -24,6 +24,10 @@ const Movie = z.object({
     rating: z.number().describe("电影的评分"),
 });
 
+// llm.withStructuredOutput(Movie)
+// // 底层发的是：response_format: { type: "json_schema", schema: {...} }
+// // 这是 OpenAI 专属参数，DeepSeek 不认识
+
 // 使用 withStructuredOutput 方法将大模型的输出转换为结构化输出
 const modelWithStructure = llm.withStructuredOutput(Movie);
 

@@ -6,7 +6,7 @@ interface Props {
 
 export function SystemPromptEditor({ onSystemChange }: Props) {
     const [open, setOpen] = useState(false);
-    const [value, setValue] = useState("你是一个智能助手，你会根据用户的问题回答用户的问题，直接回答不知道。");
+    const [value, setValue] = useState("你是一个智能助手, 认真回答用户的问题");
 
     const handleSave = () => {
         const text = value.trim();
