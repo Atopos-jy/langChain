@@ -10,6 +10,7 @@
     "demo:stream": "tsx src/3-stream.ts",
     "demo:batch": "tsx src/4-batch.ts",
     "demo:structured": "tsx src/5-structured-output.ts",
+    "demo:ws": "tsx src/ws-chat-server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
@@ -21,10 +22,12 @@
     "@langchain/openai": "^1.4.5",
     "dotenv": "^17.4.2",
     "langchain": "^1.4.0",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
