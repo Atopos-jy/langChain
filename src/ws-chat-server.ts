@@ -8,6 +8,7 @@ import {
 } from "@langchain/core/messages";
 import { WebSocketServer, WebSocket } from "ws";
 import { randomUUID } from "crypto";
+import { z } from "zod";
 
 dotenv.config();
 
@@ -68,7 +69,7 @@ wss.on("connection", (ws) => {
         const session = sessions.get(ws);
         if (!session) return;
 
-        let data: { type?: string; content?: string };
+        let data: { type?: string; content?: string; mode?: string };
         try {
             data = JSON.parse(raw.toString());
         } catch {
@@ -83,7 +84,7 @@ wss.on("connection", (ws) => {
 
         switch (data.type) {
             case "message":
-                await handleUserMessage(ws, session, data.content);
+                await handleUserMessage(ws, session, data.content, data.mode || "stream");
                 break;
 
             case "system":
@@ -119,20 +120,42 @@ wss.on("connection", (ws) => {
 
 // ==================== 消息处理函数 ====================
 
-async function handleUserMessage(ws: WebSocket, session: Session, content?: string) {
+async function handleUserMessage(ws: WebSocket, session: Session, content?: string, mode: string = "stream") {
     if (!content || typeof content !== "string" || !content.trim()) {
         ws.send(JSON.stringify({ type: "error", content: "消息内容不能为空" }));
         return;
     }
 
-    // 添加用户消息到历史
+    console.log(`[${session.id}] 🎯 调用模式: ${mode}`);
+    console.log(`[${session.id}] 📤 用户输入: ${content}`);
+
+    switch (mode) {
+        case "invoke":
+            await handleInvoke(ws, session, content);
+            break;
+        case "stream":
+            await handleStream(ws, session, content);
+            break;
+        case "batch":
+            await handleBatch(ws, session, content);
+            break;
+        case "structured":
+            await handleStructured(ws, session, content);
+            break;
+        default:
+            ws.send(JSON.stringify({ type: "error", content: `未知模式: ${mode}` }));
+    }
+}
+
+// ==================== 模式1: stream（流式输出） ====================
+async function handleStream(ws: WebSocket, session: Session, content: string) {
     session.messages.push(new HumanMessage(content));
+    console.log(`[${session.id}] 🔄 llm.stream() — 开始流式输出...`);
 
     try {
         const stream = await llm.stream(session.messages);
         let fullResponse = "";
 
-        // 流式输出每个 token
         for await (const chunk of stream) {
             const rawContent = chunk.content;
             if (rawContent == null) continue;
@@ -144,14 +167,122 @@ async function handleUserMessage(ws: WebSocket, session: Session, content?: stri
             ws.send(JSON.stringify({ type: "chunk", content: text }));
         }
 
-        // 添加 AI 回复到历史（保留上下文）
         session.messages.push(new AIMessage(fullResponse));
-
-        ws.send(JSON.stringify({ type: "done", content: fullResponse }));
-        console.log(`[${session.id}] 💬 回复完成 (${fullResponse.length} 字符)`);
+        console.log(`[${session.id}] ✅ stream 完成 (${fullResponse.length} 字符)`);
+        ws.send(JSON.stringify({ type: "done", content: fullResponse, mode: "stream" }));
     } catch (error: any) {
-        console.error(`[${session.id}] ❌ 调用失败:`, error.message);
-        ws.send(JSON.stringify({ type: "error", content: `请求失败: ${error.message}` }));
+        console.error(`[${session.id}] ❌ stream 失败:`, error.message);
+        ws.send(JSON.stringify({ type: "error", content: `stream 失败: ${error.message}` }));
+    }
+}
+
+// ==================== 模式2: invoke（一次性返回） ====================
+async function handleInvoke(ws: WebSocket, session: Session, content: string) {
+    session.messages.push(new HumanMessage(content));
+    console.log(`[${session.id}] 📡 llm.invoke() — 等待完整回复...`);
+
+    try {
+        const start = Date.now();
+        const result = await llm.invoke(session.messages);
+        const elapsed = Date.now() - start;
+
+        const text = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+        session.messages.push(new AIMessage(text));
+
+        console.log(`[${session.id}] ✅ invoke 完成 (${text.length} 字符, ${elapsed}ms)`);
+        console.log(`[${session.id}] 📊 Token用量:`, JSON.stringify(result.usage_metadata));
+
+        // invoke 一次性返回完整内容
+        ws.send(JSON.stringify({ type: "chunk", content: text }));
+        ws.send(JSON.stringify({
+            type: "done",
+            content: text,
+            mode: "invoke",
+            elapsed,
+            usage: result.usage_metadata,
+        }));
+    } catch (error: any) {
+        console.error(`[${session.id}] ❌ invoke 失败:`, error.message);
+        ws.send(JSON.stringify({ type: "error", content: `invoke 失败: ${error.message}` }));
+    }
+}
+
+// ==================== 模式3: batch（批量并发） ====================
+async function handleBatch(ws: WebSocket, session: Session, content: string) {
+    // 用户输入用逗号/分号/换行分隔多个问题
+    const questions = content.split(/[,;，；\n]/).map(q => q.trim()).filter(Boolean);
+
+    if (questions.length < 2) {
+        ws.send(JSON.stringify({ type: "error", content: "batch 模式请至少输入 2 个问题，用逗号或分号分隔" }));
+        return;
+    }
+
+    console.log(`[${session.id}] ⚡ llm.batch() — ${questions.length} 个问题并发调用...`);
+    questions.forEach((q, i) => console.log(`[${session.id}]  问题 ${i + 1}: ${q}`));
+
+    try {
+        const systemMsg = session.messages.find(m => m._getType() === "system");
+        const start = Date.now();
+
+        // 每个问题单独构造成完整的对话（带系统提示）
+        const batches = questions.map(q => {
+            const msgs: BaseMessage[] = systemMsg ? [systemMsg] : [];
+            msgs.push(new HumanMessage(q));
+            return msgs;
+        });
+
+        const responses = await llm.batch(batches, { maxConcurrency: 5 });
+        const elapsed = Date.now() - start;
+
+        console.log(`[${session.id}] ✅ batch 完成 (${elapsed}ms)`);
+
+        // 逐个返回每个问题的答案
+        ws.send(JSON.stringify({
+            type: "batch_result",
+            mode: "batch",
+            elapsed,
+            results: responses.map((r, i) => ({
+                question: questions[i],
+                answer: typeof r.content === "string" ? r.content : JSON.stringify(r.content),
+            })),
+        }));
+        ws.send(JSON.stringify({ type: "done", mode: "batch" }));
+    } catch (error: any) {
+        console.error(`[${session.id}] ❌ batch 失败:`, error.message);
+        ws.send(JSON.stringify({ type: "error", content: `batch 失败: ${error.message}` }));
+    }
+}
+
+// ==================== 模式4: structured（结构化输出） ====================
+const MovieSchema = z.object({
+    title: z.string().describe("标题"),
+    year: z.number().describe("年份"),
+    director: z.string().describe("导演"),
+    rating: z.number().describe("评分"),
+});
+
+async function handleStructured(ws: WebSocket, session: Session, content: string) {
+    console.log(`[${session.id}] 📋 llm.withStructuredOutput() — 结构化输出...`);
+
+    try {
+        const start = Date.now();
+        const modelWithStructure = llm.withStructuredOutput(MovieSchema);
+        const result = await modelWithStructure.invoke(content);
+        const elapsed = Date.now() - start;
+
+        console.log(`[${session.id}] ✅ structured 完成 (${elapsed}ms)`);
+        console.log(`[${session.id}] 📊 结构化结果:`, JSON.stringify(result));
+
+        ws.send(JSON.stringify({
+            type: "structured_result",
+            mode: "structured",
+            elapsed,
+            result,
+        }));
+        ws.send(JSON.stringify({ type: "done", mode: "structured" }));
+    } catch (error: any) {
+        console.error(`[${session.id}] ❌ structured 失败:`, error.message);
+        ws.send(JSON.stringify({ type: "error", content: `structured 失败: ${error.message}` }));
     }
 }
 

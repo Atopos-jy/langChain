@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage, ServerMessage } from "../types/message";
 
+export type InvokeMode = "stream" | "invoke" | "batch" | "structured";
+
 export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [currentMode, setCurrentMode] = useState<InvokeMode>("stream");
     const wsRef = useRef<WebSocket | null>(null);
 
     // 连接 WebSocket
@@ -41,7 +44,6 @@ export function useWebSocket() {
                     break;
 
                 case "done":
-                    // 标记流式输出完成
                     setMessages((prev) => {
                         const updated = [...prev];
                         const last = updated[updated.length - 1];
@@ -49,6 +51,9 @@ export function useWebSocket() {
                             updated[updated.length - 1] = {
                                 ...last,
                                 isStreaming: false,
+                                mode: data.mode,
+                                elapsed: data.elapsed,
+                                usage: data.usage,
                             };
                         }
                         return updated;
@@ -62,6 +67,46 @@ export function useWebSocket() {
                 case "welcome":
                     console.log("👋 欢迎消息, 会话 ID:", data.sessionId);
                     break;
+
+                case "batch_result": {
+                    const text = data.results
+                        .map((r, i) => `【问题${i + 1}】${r.question}\n\n${r.answer}`)
+                        .join("\n\n---\n\n");
+                    setMessages((prev) => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last && last.role === "assistant" && last.isStreaming) {
+                            updated[updated.length - 1] = {
+                                ...last,
+                                content: text,
+                                isStreaming: false,
+                                mode: "batch",
+                                elapsed: data.elapsed,
+                            };
+                        }
+                        return updated;
+                    });
+                    break;
+                }
+
+                case "structured_result": {
+                    const text = "```json\n" + JSON.stringify(data.result, null, 2) + "\n```";
+                    setMessages((prev) => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last && last.role === "assistant" && last.isStreaming) {
+                            updated[updated.length - 1] = {
+                                ...last,
+                                content: text,
+                                isStreaming: false,
+                                mode: "structured",
+                                elapsed: data.elapsed,
+                            };
+                        }
+                        return updated;
+                    });
+                    break;
+                }
             }
         };
 
@@ -81,12 +126,12 @@ export function useWebSocket() {
         // 1. 先把用户消息加到列表
         setMessages((prev) => [...prev, { role: "user", content }]);
 
-        // 2. 创建一个空白 AI 消息占位，准备接收流式数据
+        // 2. 创建一个空白 AI 消息占位（batch 和 structured 也用它显示结果）
         setMessages((prev) => [...prev, { role: "assistant", content: "", isStreaming: true }]);
 
-        // 3. 发送到服务端
-        wsRef.current.send(JSON.stringify({ type: "message", content }));
-    }, []);
+        // 3. 带上模式一起发送
+        wsRef.current.send(JSON.stringify({ type: "message", content, mode: currentMode }));
+    }, [currentMode]);
 
     const clearMessages = useCallback(() => {
         setMessages([]);
@@ -101,5 +146,5 @@ export function useWebSocket() {
         }
     }, []);
 
-    return { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt };
+    return { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode };
 }
