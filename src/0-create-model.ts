@@ -4,13 +4,14 @@ import { ChatOpenAI } from "@langchain/openai";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-    model: "mimo-v2.5-pro",
-    apiKey: process.env.MiMo_API_KEY,
+    model: "deepseek-v4-flash",
+    apiKey: process.env.DEEPSEEK_API_KEY,
     temperature: 0.7,
     streamUsage: false,
-    timeout: 30000, // 30秒超时，避免无限等待
+    timeout: 30000,
+    maxRetries: 2,
     configuration: {
-        baseURL: "https://token-plan-ams.xiaomimimo.com/v1",
+        baseURL: "https://api.deepseek.com",
     },
 });
 
