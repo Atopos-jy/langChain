@@ -3,16 +3,30 @@ import type { ChatMessage, ServerMessage, ToolCallInfo } from "../types/message"
 
 export type InvokeMode = "stream" | "invoke" | "batch" | "structured" | "tool";
 
+const WS_URL = "ws://localhost:8080";
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 10000;
+
 export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMode, setCurrentMode] = useState<InvokeMode>("stream");
     const wsRef = useRef<WebSocket | null>(null);
     const toolCallsRef = useRef<ToolCallInfo[]>([]);
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const mountedRef = useRef(true);
 
-    // 连接 WebSocket
-    useEffect(() => {
-        const ws = new WebSocket("ws://localhost:8080");
+    const connect = useCallback(() => {
+        // 清理旧连接
+        if (wsRef.current) {
+            wsRef.current.onopen = null;
+            wsRef.current.onclose = null;
+            wsRef.current.onmessage = null;
+            wsRef.current.onerror = null;
+            wsRef.current.close();
+        }
+
+        const ws = new WebSocket(WS_URL);
         wsRef.current = ws;
 
         ws.onopen = () => {
@@ -23,6 +37,17 @@ export function useWebSocket() {
         ws.onclose = () => {
             console.log("🔌 WebSocket 已断开");
             setIsConnected(false);
+            wsRef.current = null;
+
+            // 自动重连（指数退避）
+            if (mountedRef.current) {
+                const delay = Math.min(
+                    RECONNECT_BASE_MS * Math.pow(2, 0),
+                    RECONNECT_MAX_MS,
+                );
+                console.log(`🔄 ${delay}ms 后重连...`);
+                reconnectTimerRef.current = setTimeout(connect, delay);
+            }
         };
 
         ws.onmessage = (event) => {
@@ -53,6 +78,8 @@ export function useWebSocket() {
                         if (last && last.role === "assistant" && last.isStreaming) {
                             updated[updated.length - 1] = {
                                 ...last,
+                                // invoke 模式内容只在 done 消息里，需要写入
+                                content: data.content || last.content,
                                 isStreaming: false,
                                 mode: data.mode,
                                 elapsed: data.elapsed,
@@ -131,12 +158,31 @@ export function useWebSocket() {
             }
         };
 
-        ws.onerror = (err) => {
-            console.error("❌ WebSocket 错误:", err);
+        ws.onerror = () => {
+            // React StrictMode 会卸载/重挂组件，首次连接被中断时也会触发 error，
+            // 这里不打印 error 级别（太刺眼），交给 onclose 处理重连
         };
-
-        return () => ws.close();
     }, []);
+
+    // 挂载时建立连接，卸载时清理
+    useEffect(() => {
+        mountedRef.current = true;
+        connect();
+        return () => {
+            mountedRef.current = false;
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+            }
+            if (wsRef.current) {
+                wsRef.current.onopen = null;
+                wsRef.current.onclose = null;
+                wsRef.current.onmessage = null;
+                wsRef.current.onerror = null;
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+        };
+    }, [connect]);
 
     const sendMessage = useCallback((content: string) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {

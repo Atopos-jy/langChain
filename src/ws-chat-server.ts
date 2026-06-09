@@ -503,6 +503,8 @@ async function handleInvokeMessage(
         const response = await llm.invoke(session.messages);
         const text = typeof response.content === "string" ? response.content : "（非文本回复）";
         session.messages.push(new AIMessage(text));
+        // 先发 chunk 让客户端填充内容（invoke 模式没有流式 chunk）
+        ws.send(JSON.stringify({ type: "chunk", content: text }));
         ws.send(JSON.stringify({ type: "done", mode: "invoke", content: text }));
     } catch (error: any) {
         logger.error(`[${session.id}] 调用失败`, error.message);
