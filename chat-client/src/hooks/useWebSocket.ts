@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { ChatMessage, ServerMessage } from "../types/message";
+import type { ChatMessage, ServerMessage, ToolCallInfo } from "../types/message";
 
-export type InvokeMode = "stream" | "invoke" | "batch" | "structured";
+export type InvokeMode = "stream" | "invoke" | "batch" | "structured" | "tool";
 
 export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMode, setCurrentMode] = useState<InvokeMode>("stream");
     const wsRef = useRef<WebSocket | null>(null);
+    const toolCallsRef = useRef<ToolCallInfo[]>([]);
 
     // 连接 WebSocket
     useEffect(() => {
@@ -43,7 +44,9 @@ export function useWebSocket() {
                     });
                     break;
 
-                case "done":
+                case "done": {
+                    const toolCalls = toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined;
+                    toolCallsRef.current = []; // 重置
                     setMessages((prev) => {
                         const updated = [...prev];
                         const last = updated[updated.length - 1];
@@ -54,11 +57,13 @@ export function useWebSocket() {
                                 mode: data.mode,
                                 elapsed: data.elapsed,
                                 usage: data.usage,
+                                toolCalls,
                             };
                         }
                         return updated;
                     });
                     break;
+                }
 
                 case "error":
                     console.error("❌ 服务器错误:", data.content);
@@ -67,6 +72,22 @@ export function useWebSocket() {
                 case "welcome":
                     console.log("👋 欢迎消息, 会话 ID:", data.sessionId);
                     break;
+
+                case "tool_call":
+                    // 记录工具调用步骤
+                    toolCallsRef.current.push({ name: data.name, args: data.args });
+                    break;
+
+                case "tool_result": {
+                    // 更新最后一步工具调用的结果
+                    const steps = [...toolCallsRef.current];
+                    const lastStep = steps[steps.length - 1];
+                    if (lastStep && !lastStep.result) {
+                        lastStep.result = data.content;
+                        toolCallsRef.current = steps;
+                    }
+                    break;
+                }
 
                 case "batch_result": {
                     const text = data.results
@@ -123,10 +144,13 @@ export function useWebSocket() {
             return;
         }
 
-        // 1. 先把用户消息加到列表
+        // 1. 清空上一步的工具调用记录
+        toolCallsRef.current = [];
+
+        // 2. 先把用户消息加到列表
         setMessages((prev) => [...prev, { role: "user", content }]);
 
-        // 2. 创建一个空白 AI 消息占位（batch 和 structured 也用它显示结果）
+        // 3. 创建一个空白 AI 消息占位
         setMessages((prev) => [...prev, { role: "assistant", content: "", isStreaming: true }]);
 
         // 3. 带上模式一起发送

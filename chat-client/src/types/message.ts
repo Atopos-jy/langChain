@@ -1,11 +1,17 @@
+export interface ToolCallInfo {
+    name: string;
+    args: Record<string, unknown>;
+    result?: string;
+}
+
 export interface ChatMessage {
     role: "user" | "assistant";
     content: string;
     isStreaming?: boolean;
-    // 非流式模式的额外信息
     mode?: string;
     elapsed?: number;
     usage?: Record<string, unknown>;
+    toolCalls?: ToolCallInfo[];   // 工具调用步骤
 }
 
 export type ServerMessage =
@@ -14,4 +20,7 @@ export type ServerMessage =
     | { type: "error"; content: string }
     | { type: "welcome"; content: string; sessionId: string }
     | { type: "batch_result"; mode: string; elapsed: number; results: { question: string; answer: string }[] }
-    | { type: "structured_result"; mode: string; elapsed: number; result: Record<string, unknown> };
+    | { type: "structured_result"; mode: string; elapsed: number; result: Record<string, unknown> }
+    // 工具调用相关
+    | { type: "tool_call"; name: string; args: Record<string, unknown> }
+    | { type: "tool_result"; content: string };

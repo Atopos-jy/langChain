@@ -10,6 +10,7 @@ const MODES: { value: InvokeMode; label: string; desc: string }[] = [
     { value: "invoke", label: "Invoke", desc: "一次性返回" },
     { value: "batch", label: "Batch", desc: "批量并发" },
     { value: "structured", label: "Structured", desc: "结构化输出" },
+    { value: "tool", label: "Tool", desc: "工具调用（天气查询）" },
 ];
 
 export function ModeSelector({ mode, onChange }: Props) {

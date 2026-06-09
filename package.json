@@ -9,6 +9,7 @@
     "demo:tool-message": "tsx src/2-tool-message.ts",
     "demo:tool-calling": "tsx src/3-tool-calling.ts",
     "demo:tool-calling-api": "tsx src/4-tool-calling-api.ts",
+    "demo:ws": "tsx src/ws-chat-server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
@@ -19,10 +20,12 @@
     "@langchain/core": "^1.1.44",
     "@langchain/openai": "^1.4.5",
     "dotenv": "^17.4.2",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
