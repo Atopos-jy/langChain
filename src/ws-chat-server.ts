@@ -241,16 +241,33 @@ wss.on("connection", (ws) => {
         }
 
         switch (data.type) {
-            case "message":
+            case "message": {
                 session.messageCount++;
                 logger.info(
                     `📤 [${session.id}] 第 ${session.messageCount} 条消息: ${data.content?.slice(0, 50)}`,
                 );
                 const start = Date.now();
-                await handleToolMessage(ws, session, data.content || "");
+
+                // 根据 mode 路由到不同的处理器
+                const mode = data.mode || "stream";
+                logger.info(`🎯 [${session.id}] 使用模式: ${mode}`);
+                switch (mode) {
+                    case "tool":
+                        await handleToolMessage(ws, session, data.content || "");
+                        break;
+                    case "invoke":
+                        await handleInvokeMessage(ws, session, data.content || "");
+                        break;
+                    case "stream":
+                    default:
+                        await handleStreamMessage(ws, session, data.content || "");
+                        break;
+                }
+
                 const elapsed = Date.now() - start;
                 logger.info(`💬 [${session.id}] 回复完成 (${elapsed}ms)`);
                 break;
+            }
             case "system":
                 await handleSystemPrompt(ws, session, data.content || "");
                 break;
@@ -328,57 +345,109 @@ async function handleToolMessage(
 
     while (rounds < MAX_ROUNDS) {
         try {
-            // 带重试的模型调用
-            const response = await withRetry(
-                () => llmWithTools.invoke(session.messages),
-                `[${session.id}] llm.invoke`,
-                2,
-            );
+            // ① 流式调用模型（打字机效果）
+            // 模型已配置 maxRetries:2，stream 由 LangChain 内部重试
+            const stream = await llmWithTools.stream(session.messages);
             rounds++;
 
-            if (response.tool_calls && response.tool_calls.length > 0) {
-                const tc = response.tool_calls[0];
-                logger.info(
-                    `🔧 [${session.id}] 模型调用工具: ${tc.name}(${JSON.stringify(tc.args)})`,
-                );
+            let collectedContent = "";
+            let detectedToolCall = false;
+            // 流式工具调用分片合并（支持多工具并行，按 index 区分）
+            const mergedToolCallChunks: Record<
+                number,
+                { name: string; args: string; id: string }
+            > = {};
 
-                ws.send(
-                    JSON.stringify({
-                        type: "tool_call",
-                        name: tc.name,
-                        args: tc.args,
-                    }),
-                );
+            for await (const chunk of stream) {
+                // 检测工具调用分片
+                const callChunks = chunk.tool_call_chunks;
+                if (callChunks && callChunks.length > 0) {
+                    detectedToolCall = true;
+                    for (const tcc of callChunks) {
+                        const idx = tcc.index ?? 0;
+                        if (!mergedToolCallChunks[idx]) {
+                            mergedToolCallChunks[idx] = {
+                                name: "",
+                                args: "",
+                                id: "",
+                            };
+                        }
+                        if (tcc.name) mergedToolCallChunks[idx].name += tcc.name;
+                        if (tcc.args) mergedToolCallChunks[idx].args += tcc.args;
+                        if (tcc.id) mergedToolCallChunks[idx].id += tcc.id;
+                    }
+                }
 
-                // 执行工具（也带重试）
-                const result = await withRetry(
-                    () => getWeatherTool.invoke(tc.args as any),
-                    `[${session.id}] 工具 ${tc.name}`,
-                    1,
-                );
-
-                ws.send(
-                    JSON.stringify({
-                        type: "tool_result",
-                        content: String(result),
-                    }),
-                );
-
-                session.messages.push(response);
-                session.messages.push(
-                    new ToolMessage({
-                        content: String(result),
-                        tool_call_id: tc.id || "",
-                    }),
-                );
-            } else {
+                // 文本内容立即推送 → 客户端实现打字机效果
                 const text =
-                    typeof response.content === "string"
-                        ? response.content
-                        : JSON.stringify(response.content);
-                session.messages.push(response);
+                    typeof chunk.content === "string" ? chunk.content : "";
+                if (text) {
+                    collectedContent += text;
+                    // 逐字符拆开发送 → 打字机效果
+                    for (const char of text) {
+                        ws.send(JSON.stringify({ type: "chunk", content: char }));
+                    }
+                }
+            }
 
-                ws.send(JSON.stringify({ type: "chunk", content: text }));
+            // ② 判断是否是工具调用
+            if (detectedToolCall) {
+                logger.info(
+                    `🔧 [${session.id}] 模型调用了工具（流式）`,
+                );
+
+                for (const [, tc] of Object.entries(mergedToolCallChunks)) {
+                    let args: Record<string, unknown>;
+                    try {
+                        args = JSON.parse(tc.args);
+                    } catch {
+                        args = {};
+                    }
+
+                    ws.send(
+                        JSON.stringify({
+                            type: "tool_call",
+                            name: tc.name,
+                            args,
+                        }),
+                    );
+
+                    // 执行工具（带重试）
+                    const result = await withRetry(
+                        () => getWeatherTool.invoke(args as any),
+                        `[${session.id}] 工具 ${tc.name}`,
+                        1,
+                    );
+
+                    ws.send(
+                        JSON.stringify({
+                            type: "tool_result",
+                            content: String(result),
+                        }),
+                    );
+
+                    // 重建消息历史
+                    session.messages.push(
+                        new AIMessage({
+                            content: collectedContent,
+                            tool_calls: [
+                                { name: tc.name, args, id: tc.id },
+                            ] as any,
+                        }),
+                    );
+                    session.messages.push(
+                        new ToolMessage({
+                            content: String(result),
+                            tool_call_id: tc.id,
+                        }),
+                    );
+                }
+                // 继续循环 → 让模型基于工具结果生成最终回复
+            } else {
+                // ③ 纯文本回复 → 结束
+                const text = collectedContent || "（空回复）";
+                session.messages.push(new AIMessage(text));
+
                 ws.send(
                     JSON.stringify({
                         type: "done",
@@ -389,7 +458,10 @@ async function handleToolMessage(
                 return;
             }
         } catch (error: any) {
-            logger.error(`[${session.id}] 调用失败（重试耗尽）`, error.message);
+            logger.error(
+                `[${session.id}] 调用失败（重试耗尽）`,
+                error.message,
+            );
             ws.send(
                 JSON.stringify({
                     type: "error",
@@ -400,13 +472,85 @@ async function handleToolMessage(
         }
     }
 
-    logger.warn(`[${session.id}] 工具调用超过 ${MAX_ROUNDS} 轮，强制终止`);
+    logger.warn(
+        `[${session.id}] 工具调用超过 ${MAX_ROUNDS} 轮，强制终止`,
+    );
     ws.send(
         JSON.stringify({
             type: "error",
             content: "工具调用次数过多，已自动终止",
         }),
     );
+}
+
+// ========================================================================
+// ⑨-2 非流式调用（invoke 模式）
+// ========================================================================
+
+async function handleInvokeMessage(
+    ws: WebSocket,
+    session: Session,
+    content: string,
+) {
+    if (!content.trim()) {
+        ws.send(JSON.stringify({ type: "error", content: "消息不能为空" }));
+        return;
+    }
+
+    session.messages.push(new HumanMessage(content));
+
+    try {
+        const response = await llm.invoke(session.messages);
+        const text = typeof response.content === "string" ? response.content : "（非文本回复）";
+        session.messages.push(new AIMessage(text));
+        ws.send(JSON.stringify({ type: "done", mode: "invoke", content: text }));
+    } catch (error: any) {
+        logger.error(`[${session.id}] 调用失败`, error.message);
+        ws.send(JSON.stringify({ type: "error", content: `请求失败: ${error.message}` }));
+    }
+}
+
+// ========================================================================
+// ⑨-1 流式调用（stream 模式，无工具绑定——真正的打字机效果）
+// ========================================================================
+
+async function handleStreamMessage(
+    ws: WebSocket,
+    session: Session,
+    content: string,
+) {
+    if (!content.trim()) {
+        ws.send(JSON.stringify({ type: "error", content: "消息不能为空" }));
+        return;
+    }
+
+    session.messages.push(new HumanMessage(content));
+
+    try {
+        // 使用不绑定工具的 llm.stream() → 真正的逐 token 流式
+        const stream = await llm.stream(session.messages);
+        let collectedContent = "";
+
+        for await (const chunk of stream) {
+            const text = typeof chunk.content === "string" ? chunk.content : "";
+            if (text) {
+                collectedContent += text;
+                logger.debug(`[${session.id}] API chunk 长度=${text.length}: "${text.slice(0, 20)}..."`);
+                // 逐字符拆开发送 → 客户端看到打字机效果
+                // 不受 API chunk 大小影响
+                for (const char of text) {
+                    ws.send(JSON.stringify({ type: "chunk", content: char }));
+                }
+            }
+        }
+
+        const text = collectedContent || "（空回复）";
+        session.messages.push(new AIMessage(text));
+        ws.send(JSON.stringify({ type: "done", mode: "stream", content: text }));
+    } catch (error: any) {
+        logger.error(`[${session.id}] 流式调用失败`, error.message);
+        ws.send(JSON.stringify({ type: "error", content: `请求失败: ${error.message}` }));
+    }
 }
 
 // ========================================================================
