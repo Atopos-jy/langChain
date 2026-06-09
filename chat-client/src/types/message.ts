@@ -12,11 +12,12 @@ export interface ChatMessage {
     elapsed?: number;
     usage?: Record<string, unknown>;
     toolCalls?: ToolCallInfo[];   // 工具调用步骤
+    prompt?: string;              // 实际发给 AI 的提示词（调试用）
 }
 
 export type ServerMessage =
     | { type: "chunk"; content: string }
-    | { type: "done"; content?: string; mode?: string; elapsed?: number; usage?: Record<string, unknown> }
+    | { type: "done"; content?: string; mode?: string; elapsed?: number; usage?: Record<string, unknown>; prompt?: string }
     | { type: "error"; content: string }
     | { type: "welcome"; content: string; sessionId: string }
     | { type: "batch_result"; mode: string; elapsed: number; results: { question: string; answer: string }[] }

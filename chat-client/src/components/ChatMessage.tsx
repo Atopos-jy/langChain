@@ -56,6 +56,27 @@ export function ChatMessage({ message }: Props) {
                     {message.content}
                     {message.isStreaming && <span style={{ opacity: 0.7 }}>|</span>}
                 </div>
+
+                {/* 调试：显示实际发给 AI 的提示词 */}
+                {!isUser && message.prompt && (
+                    <details style={{ marginTop: 6, fontSize: 12, color: "#888" }}>
+                        <summary style={{ cursor: "pointer", userSelect: "none" }}>
+                            🔍 查看实际提示词
+                        </summary>
+                        <pre style={{
+                            margin: "4px 0 0",
+                            padding: 8,
+                            borderRadius: 6,
+                            backgroundColor: "#f5f5f5",
+                            fontSize: 11,
+                            lineHeight: 1.5,
+                            maxHeight: 200,
+                            overflow: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-all",
+                        }}>{message.prompt}</pre>
+                    </details>
+                )}
             </div>
         </div>
     );

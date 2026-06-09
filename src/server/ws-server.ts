@@ -7,12 +7,16 @@ import { createSession, getSession, deleteSession, clearHistory, type Session } 
 import { checkRateLimit, clearRateLimit } from "./rate-limiter";
 import { handleStream } from "./handlers/stream";
 import { handleInvoke } from "./handlers/invoke";
+import { handleBatch } from "./handlers/batch";
+import { handleStructured } from "./handlers/structured";
+import { promptTemplates } from "./prompts";
 
 /** 客户端消息格式 */
 interface ClientMessage {
     type?: string;
     content?: string;
     mode?: string;
+    template?: string;   // 提示词模板: tech / life / english / interview
 }
 
 /**
@@ -23,7 +27,8 @@ export function createServer(): WebSocketServer {
     const wss = new WebSocketServer({ port: CONFIG.port });
 
     logger.info(`🤖 WebSocket 服务器已启动: ws://localhost:${CONFIG.port}`);
-    logger.info(`📝 模式: stream / invoke`);
+    logger.info(`📝 模式: stream / invoke / batch / structured`);
+    logger.info(`📝 模板: tech(技术导师) / life(生活导师) / english(英语) / interview(面试官)`);
     logger.info(`📝 限流: 每分钟 ${CONFIG.rateLimit.maxRequests} 条/会话`);
     logger.info(`📝 按 Ctrl+C 停止`);
 
@@ -67,15 +72,30 @@ export function createServer(): WebSocketServer {
             switch (data.type) {
                 case "message": {
                     logger.info(`📤 [${sessionId}] 消息: ${data.content?.slice(0, 50)}`);
+
+                    // 🎮 内嵌命令：直接在聊天框打字切换设置
+                    const content = data.content || "";
+                    if (content.startsWith("/")) {
+                        const handled = handleCommand(ws, sessionId, content, sess);
+                        if (handled) break;
+                    }
+
                     const mode = data.mode || "stream";
                     logger.info(`🎯 [${sessionId}] 模式: ${mode}`);
 
                     const start = Date.now();
 
+                    // 模板选择：命令设置 > 前端传参 > 默认
+                    const templateKey = sess.currentTemplate || data.template || "tech";
+
                     if (mode === "invoke") {
-                        await handleInvoke(ws, sess, data.content || "");
+                        await handleInvoke(ws, sess, data.content || "", templateKey);
+                    } else if (mode === "batch") {
+                        await handleBatch(ws, sess, data.content || "", templateKey);
+                    } else if (mode === "structured") {
+                        await handleStructured(ws, sess, data.content || "", templateKey);
                     } else {
-                        await handleStream(ws, sess, data.content || "");
+                        await handleStream(ws, sess, data.content || "", templateKey);
                     }
 
                     logger.info(`💬 [${sessionId}] 完成 (${Date.now() - start}ms)`);
@@ -137,6 +157,51 @@ export function createServer(): WebSocketServer {
     });
 
     return wss;
+}
+
+/** 🎮 处理聊天命令（/开头） */
+function handleCommand(ws: WebSocket, sessionId: string, cmd: string, session: Session): boolean {
+    const [name, ...args] = cmd.slice(1).split(/\s+/);
+    const arg = args.join(" ");
+
+    switch (name) {
+        case "template": {
+            const key = arg.trim();
+            if (!promptTemplates[key]) {
+                const available = Object.keys(promptTemplates).join(", ");
+                ws.send(JSON.stringify({
+                    type: "error",
+                    content: `未知模板 "${key}"，可选: ${available}`,
+                }));
+                return true;
+            }
+            session.currentTemplate = key;
+            ws.send(JSON.stringify({
+                type: "system_set",
+                content: `✅ 已切换为「${key}」模板`,
+            }));
+            logger.info(`📋 [${sessionId}] 模板已切换: ${key}`);
+            return true;
+        }
+
+        case "help": {
+            const templates = Object.entries(promptTemplates)
+                .map(([k]) => `  /template ${k}`)
+                .join("\n");
+            ws.send(JSON.stringify({
+                type: "system_set",
+                content: `📖 可用命令:\n/template <名称> — 切换提示词模板\n  ${templates}\n/clear — 清除对话历史\n/help — 显示此帮助`,
+            }));
+            return true;
+        }
+
+        default:
+            ws.send(JSON.stringify({
+                type: "error",
+                content: `未知命令 /${name}，输入 /help 查看可用命令`,
+            }));
+            return true;
+    }
 }
 
 /** 更新系统提示词 */

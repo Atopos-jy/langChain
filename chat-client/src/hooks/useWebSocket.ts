@@ -85,6 +85,7 @@ export function useWebSocket() {
                                 elapsed: data.elapsed,
                                 usage: data.usage,
                                 toolCalls,
+                                prompt: data.prompt,
                             };
                         }
                         return updated;

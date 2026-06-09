@@ -1,6 +1,7 @@
 import { llm } from "../llm";
 import { addAIMessage, addUserMessage, type Session } from "../session";
 import { logger } from "../logger";
+import { getPromptTemplate } from "../prompts";
 import WebSocket from "ws";
 
 /**
@@ -11,13 +12,18 @@ export async function handleStream(
     ws: WebSocket,
     session: Session,
     content: string,
+    templateKey: string = "tech",
 ): Promise<void> {
     if (!content.trim()) {
         ws.send(JSON.stringify({ type: "error", content: "消息不能为空" }));
         return;
     }
 
-    addUserMessage(session, content);
+    // 根据客户端选择的模板包装
+    const template = getPromptTemplate(templateKey);
+    const formatted = await template.format({ question: content });
+    logger.info(`[${session.id}] 🔍 模板[${templateKey}] 实际发给 AI 的文本:\n${formatted}`);
+    addUserMessage(session, formatted);
 
     try {
         const stream = await llm.stream(session.messages);
@@ -37,7 +43,7 @@ export async function handleStream(
 
         const reply = collected || "（空回复）";
         addAIMessage(session, reply);
-        ws.send(JSON.stringify({ type: "done", mode: "stream", content: reply }));
+        ws.send(JSON.stringify({ type: "done", mode: "stream", content: reply, prompt: formatted }));
     } catch (error: any) {
         logger.error(`[${session.id}] stream 调用失败`, error.message);
         ws.send(JSON.stringify({ type: "error", content: `请求失败: ${error.message}` }));

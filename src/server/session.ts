@@ -7,6 +7,7 @@ export interface Session {
     messages: BaseMessage[];
     createdAt: number;
     messageCount: number;
+    currentTemplate?: string;   // 当前选中的模板 key，通过 /template 命令设置
 }
 
 const sessions = new Map<string, Session>();
