@@ -41,6 +41,27 @@ User question: {question}
 限制在{limit}字以内。
 `),
 
+    /** 思维链：复杂问题一步步推理 */
+    cot: PromptTemplate.fromTemplate(`
+{question}
+
+请一步步分析，把推理过程写清楚，最后给出答案。
+`),
+
+    /** Few-shot：中文→JSON 格式转换 */
+    json: PromptTemplate.fromTemplate(`
+将用户输入转换为 JSON 格式，只输出 JSON，不要多余的解释。
+
+例子：
+输入：苹果5元，香蕉3元，一共多少钱？
+输出：{{ "items": [{{"name": "苹果", "price": 5}}, {{"name": "香蕉", "price": 3}}], "total": 8 }}
+
+输入：张三25岁，李四30岁
+输出：{{ "people": [{{"name": "张三", "age": 25}}, {{"name": "李四", "age": 30}}] }}
+
+输入：{question}
+输出：`),
+
 };
 
 /** 默认使用的模板 key */
