@@ -26,6 +26,7 @@ const prompt = PromptTemplate.fromTemplate(`
 你是一个{role}。
 请用不超过{limit}字回答以下问题：
 {question}
+请用{language}回答
 `);
 
 // 使用 format 注入数据，生成最终的提示词字符串
@@ -33,6 +34,7 @@ const promptStr = await prompt.format({
     role: "前端面试官",
     limit: "50",
     question: "什么是闭包",
+    language: "中文",
 });
 
 console.log("--- 生成的提示词 ---");
@@ -48,6 +50,7 @@ const promptStr2 = await prompt.format({
     role: "后端面试官",
     limit: "100",
     question: "什么是事务",
+    language: "英文",
 });
 
 console.log("\n--- 复用模板，切换后端角色和提示词 ---");

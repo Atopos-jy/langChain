@@ -50,3 +50,12 @@ const res2 = await chain.invoke({
 
 console.log("\n--- 后端面试 ---");
 console.log(res2.content);
+
+const res3 = await chain.invoke({
+    role: "产品经理面试官",
+    question: "如何判断一个需求该不该做",
+    limit: "80",
+});
+
+console.log("\n--- 产品经理面试 ---");
+console.log(res3.content);
