@@ -5,6 +5,7 @@
   "description": "LangChain.js 学习项目，通过实践掌握 LangChain.js 的核心概念与使用方式。",
   "scripts": {
     "dev": "tsx src/runnable-sequence.ts",
+    "dev:server": "tsx src/server/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },

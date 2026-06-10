@@ -8,7 +8,7 @@ dotenv.config();
 
 const llm = new ChatOpenAI({
     model: "deepseek-v4-flash",
-    apiKey: process.env.MiMo_API_KEY,
+    apiKey: process.env.DEEPSEEK_API_KEY,
     temperature: 0.7,
     streamUsage: false,
     timeout: 30000, // 30秒超时，避免无限等待
@@ -114,6 +114,46 @@ const fullChain = RunnableSequence.from([
 ]);
 
 // ---------- 执行 ----------
-const result = await fullChain.invoke({ topic: "闭包" });
+console.log("=".repeat(60));
+console.log("🅰️ 方案一：RunnableSequence.from（保留所有中间结果）");
+console.log("=".repeat(60));
 
-console.log(result);
+// 拆开执行，展示每一步的中间值
+console.log("\n📌 第一步：生成解释 →");
+const step1Result = await explainChain.invoke({ topic: "闭包" });
+console.log(`"${step1Result}"`);
+console.log(`长度: ${step1Result.length} 字`);
+
+console.log("\n📌 第二步：提炼要点 →（同时保留了第一步的解释）");
+const step2Result = await summaryChain.invoke({ explanation: step1Result });
+
+console.log("\n📌 第三步：结构化输出（基于 解释+要点 两份数据）");
+const result = await formatChain.invoke({
+    explanation: step1Result,
+    summary: step2Result,
+});
+
+console.log("\n📦 最终输出：");
+console.log(JSON.stringify(result, null, 2));
+
+console.log("\n" + "=".repeat(60));
+console.log("🅱️ 方案二：pipe 串联（中间结果丢失！）");
+console.log("=".repeat(60));
+
+const pipeStep1 = await explainChain.invoke({ topic: "闭包" });
+console.log(`\n📌 第一步：生成解释 → "${pipeStep1.slice(0, 30)}..."`);
+console.log(`   ✅ 解释已经生成，但 pipe 只会把「值」往下传`);
+
+console.log(`\n📌 第二步：pipe 把解释传给 summaryChain`);
+const pipeStep2 = await summaryChain.invoke({ explanation: pipeStep1 });
+console.log(`   输出 → "${pipeStep2}"`);
+console.log(`   ❌ 注意：到这里，原始的详细解释 EXPLANATION 就被丢了！`);
+
+console.log(`\n📌 第三步：formatChain 只能拿到 summary，没有 explanation`);
+const pipeResult = await formatChain.invoke({
+    explanation: "（原文已丢失，只能填占位符 😢）",
+    summary: pipeStep2,
+});
+
+console.log("\n📦 最终输出：");
+console.log(JSON.stringify(pipeResult, null, 2));
