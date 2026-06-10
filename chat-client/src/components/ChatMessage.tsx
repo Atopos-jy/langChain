@@ -6,6 +6,28 @@ interface Props {
 
 export function ChatMessage({ message }: Props) {
     const isUser = message.role === "user";
+    const isStatus = message.role === "status";
+
+    if (isStatus) {
+        return (
+            <div style={{
+                display: "flex",
+                justifyContent: "center",
+                marginBottom: 8,
+            }}>
+                <div style={{
+                    padding: "4px 14px",
+                    borderRadius: 12,
+                    backgroundColor: "#f0f7ff",
+                    border: "1px solid #d0e4f5",
+                    fontSize: 13,
+                    color: "#555",
+                }}>
+                    {message.content}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div

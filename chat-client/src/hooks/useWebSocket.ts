@@ -11,7 +11,6 @@ export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMode, setCurrentMode] = useState<InvokeMode>("stream");
-    const [status, setStatus] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const welcomeShownRef = useRef(false);
     const toolCallsRef = useRef<ToolCallInfo[]>([]);
@@ -74,7 +73,6 @@ export function useWebSocket() {
                 case "done": {
                     const toolCalls = toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined;
                     toolCallsRef.current = []; // 重置
-                    setStatus(null); // 清除状态
                     setMessages((prev) => {
                         const updated = [...prev];
                         const last = updated[updated.length - 1];
@@ -112,7 +110,18 @@ export function useWebSocket() {
                     break;
 
                 case "status":
-                    setStatus(data.content);
+                    // 更新 AI 气泡内部的内容（替换 streaming 占位的内容）
+                    setMessages((prev) => {
+                        const updated = [...prev];
+                        const last = updated[updated.length - 1];
+                        if (last && last.role === "assistant" && last.isStreaming) {
+                            updated[updated.length - 1] = {
+                                ...last,
+                                content: data.content,
+                            };
+                        }
+                        return updated;
+                    });
                     break;
 
                 case "tool_call":
@@ -231,5 +240,5 @@ export function useWebSocket() {
         }
     }, []);
 
-    return { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode, status };
+    return { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode };
 }

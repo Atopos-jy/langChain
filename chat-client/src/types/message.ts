@@ -5,7 +5,7 @@ export interface ToolCallInfo {
 }
 
 export interface ChatMessage {
-    role: "user" | "assistant";
+    role: "user" | "assistant" | "status";
     content: string;
     isStreaming?: boolean;
     mode?: string;
