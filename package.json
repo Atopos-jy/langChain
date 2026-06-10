@@ -9,6 +9,7 @@
     "dev:tool-calling": "tsx src/tool-calling-agent.ts",
     "dev:plan": "tsx src/plan-and-execute.ts",
     "dev:plan-graph": "tsx src/plan-and-execute-langgraph.ts",
+    "dev:server": "tsx src/server/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
