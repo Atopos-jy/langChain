@@ -6,12 +6,14 @@ import { StringOutputParser } from "@langchain/core/output_parsers";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
+  model: "deepseek-v4-flash",
+  apiKey: process.env.DEEPSEEK_API_KEY,
   temperature: 0.7,
   streamUsage: false,
+  timeout: 30000,
+  maxRetries: 2,
   configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    baseURL: "https://api.deepseek.com",
   },
 });
 
