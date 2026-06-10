@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage, ServerMessage, ToolCallInfo } from "../types/message";
 
-export type InvokeMode = "stream" | "invoke" | "batch" | "structured" | "tool";
+export type InvokeMode = "stream" | "invoke" | "batch" | "structured" | "tool" | "deep";
 
 const WS_URL = "ws://localhost:8080";
 const RECONNECT_BASE_MS = 1000;
@@ -11,7 +11,9 @@ export function useWebSocket() {
     const [isConnected, setIsConnected] = useState(false);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [currentMode, setCurrentMode] = useState<InvokeMode>("stream");
+    const [status, setStatus] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
+    const welcomeShownRef = useRef(false);
     const toolCallsRef = useRef<ToolCallInfo[]>([]);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
@@ -72,6 +74,7 @@ export function useWebSocket() {
                 case "done": {
                     const toolCalls = toolCallsRef.current.length > 0 ? [...toolCallsRef.current] : undefined;
                     toolCallsRef.current = []; // 重置
+                    setStatus(null); // 清除状态
                     setMessages((prev) => {
                         const updated = [...prev];
                         const last = updated[updated.length - 1];
@@ -99,6 +102,17 @@ export function useWebSocket() {
 
                 case "welcome":
                     console.log("👋 欢迎消息, 会话 ID:", data.sessionId);
+                    if (!welcomeShownRef.current) {
+                        welcomeShownRef.current = true;
+                        setMessages((prev) => [
+                            ...prev,
+                            { role: "assistant", content: data.content },
+                        ]);
+                    }
+                    break;
+
+                case "status":
+                    setStatus(data.content);
                     break;
 
                 case "tool_call":
@@ -217,5 +231,5 @@ export function useWebSocket() {
         }
     }, []);
 
-    return { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode };
+    return { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode, status };
 }

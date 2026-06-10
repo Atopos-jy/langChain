@@ -6,7 +6,7 @@ import { SystemPromptEditor } from "./components/SystemPromptEditor";
 import { ModeSelector } from "./components/ModeSelector";
 
 function App() {
-    const { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode } = useWebSocket();
+    const { isConnected, messages, sendMessage, clearMessages, sendSystemPrompt, currentMode, setCurrentMode, status } = useWebSocket();
 
     return (
         <div style={{
@@ -59,6 +59,19 @@ function App() {
                 <ModeSelector mode={currentMode} onChange={setCurrentMode} />
                 <span>{currentMode} 模式</span>
             </div>
+
+            {/* 状态提示（deep 模式进度） */}
+            {status && (
+                <div style={{
+                    padding: "6px 16px",
+                    fontSize: 13,
+                    color: "#555",
+                    background: "#f0f7ff",
+                    borderBottom: "1px solid #d0e4f5",
+                }}>
+                    {status}
+                </div>
+            )}
 
             {/* 消息列表 */}
             <MessageList messages={messages} />

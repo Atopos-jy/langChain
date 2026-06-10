@@ -19,6 +19,7 @@ export type ServerMessage =
     | { type: "chunk"; content: string }
     | { type: "done"; content?: string; mode?: string; elapsed?: number; usage?: Record<string, unknown>; prompt?: string }
     | { type: "error"; content: string }
+    | { type: "status"; content: string }
     | { type: "welcome"; content: string; sessionId: string }
     | { type: "batch_result"; mode: string; elapsed: number; results: { question: string; answer: string }[] }
     | { type: "structured_result"; mode: string; elapsed: number; result: Record<string, unknown> }

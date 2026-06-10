@@ -10,6 +10,7 @@ const MODES: { value: InvokeMode; label: string; desc: string }[] = [
     { value: "invoke", label: "Invoke", desc: "一次性返回" },
     { value: "batch", label: "Batch", desc: "批量并发" },
     { value: "structured", label: "Structured", desc: "结构化输出" },
+    { value: "deep", label: "Deep", desc: "深度思考（任务拆解）" },
     { value: "tool", label: "Tool", desc: "工具调用（天气查询）" },
 ];
 
