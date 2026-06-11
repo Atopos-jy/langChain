@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ChatMessage, ServerMessage, ToolCallInfo } from "../types/message";
 
-export type InvokeMode = "stream" | "invoke" | "batch" | "structured" | "tool" | "deep";
+export type InvokeMode = "stream" | "invoke" | "batch" | "structured" | "tool" | "deep" | "deep-langgraph";
 
 const WS_URL = "ws://localhost:8080";
 const RECONNECT_BASE_MS = 1000;

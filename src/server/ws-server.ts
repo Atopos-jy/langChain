@@ -10,6 +10,7 @@ import { handleInvoke } from "./handlers/invoke";
 import { handleBatch } from "./handlers/batch";
 import { handleStructured } from "./handlers/structured";
 import { handleDeep } from "./handlers/deep";
+import { handleDeepLangGraph } from "./handlers/deep-langgraph";
 import { promptTemplates } from "./prompts";
 
 /** 客户端消息格式 */
@@ -28,7 +29,7 @@ export function createServer(): WebSocketServer {
     const wss = new WebSocketServer({ port: CONFIG.port });
 
     logger.info(`🤖 WebSocket 服务器已启动: ws://localhost:${CONFIG.port}`);
-    logger.info(`📝 模式: stream / invoke / batch / structured / deep`);
+    logger.info(`📝 模式: stream / invoke / batch / structured / deep / deep-langgraph`);
     logger.info(`📝 模板: tech(技术导师) / life(生活导师) / english(英语) / interview(面试官)`);
     logger.info(`📝 限流: 每分钟 ${CONFIG.rateLimit.maxRequests} 条/会话`);
     logger.info(`📝 按 Ctrl+C 停止`);
@@ -97,6 +98,8 @@ export function createServer(): WebSocketServer {
                         await handleStructured(ws, sess, data.content || "", templateKey);
                     } else if (mode === "deep") {
                         await handleDeep(ws, sess, data.content || "", templateKey);
+                    } else if (mode === "deep-langgraph") {
+                        await handleDeepLangGraph(ws, sess, data.content || "", templateKey);
                     } else {
                         await handleStream(ws, sess, data.content || "", templateKey);
                     }
