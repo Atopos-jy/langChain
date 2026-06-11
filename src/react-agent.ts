@@ -6,15 +6,15 @@ import { StringOutputParser } from "@langchain/core/output_parsers";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "deepseek-v4-flash",
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  temperature: 0.7,
-  streamUsage: false,
-  timeout: 30000,
-  maxRetries: 2,
-  configuration: {
-    baseURL: "https://api.deepseek.com",
-  },
+    model: "deepseek-v4-flash",
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    temperature: 0.7,
+    streamUsage: false,
+    timeout: 30000,
+    maxRetries: 2,
+    configuration: {
+        baseURL: "https://api.deepseek.com",
+    },
 });
 
 const parser = new StringOutputParser();
@@ -35,44 +35,46 @@ const parser = new StringOutputParser();
 
 // ---------- 定义工具（模拟） ----------
 interface Tool {
-  name: string;
-  description: string;
-  execute: (input: string) => Promise<string>;
+    name: string;
+    description: string;
+    execute: (input: string) => Promise<string>;
 }
 
 const tools: Tool[] = [
-  {
-    name: "search",
-    description: "搜索网络信息",
-    execute: async (query: string) => {
-      // 模拟搜索结果
-      const results: Record<string, string> = {
-        "北京天气": "北京今天晴，25°C，微风",
-        "上海天气": "上海多云，28°C，东南风3级",
-        "闭包": "闭包是JavaScript中的重要概念，函数可以记住并访问其词法作用域",
-      };
-      const matched = Object.entries(results).find(([key]) => {
-        const chars = key.split("");
-        return chars.every((c) => query.includes(c));
-      });
-      console.log(`天气搜索工具结果：${matched?.[1] || ""}`);
-      return matched ? matched[1] : `未找到关于"${query}"的信息`;
+    {
+        name: "search",
+        description: "搜索网络信息",
+        execute: async (query: string) => {
+            // 模拟搜索结果
+            const results: Record<string, string> = {
+                北京天气: "北京今天晴，25°C，微风",
+                上海天气: "上海多云，28°C，东南风3级",
+                闭包: "闭包是JavaScript中的重要概念，函数可以记住并访问其词法作用域",
+            };
+            const matched = Object.entries(results).find(([key]) => {
+                const chars = key.split("");
+                return chars.every((c) => query.includes(c));
+            });
+            console.log(`天气搜索工具结果：${matched?.[1] || ""}`);
+            return matched ? matched[1] : `未找到关于"${query}"的信息`;
+        },
     },
-  },
-  {
-    name: "calculate",
-    description: "数学计算",
-    execute: async (expression: string) => {
-      try {
-        // 安全起见，只允许简单数学运算
-        const result = Function(`"use strict"; return (${expression})`)();
-        console.log(`计算工具结果：${result}`);
-        return `${expression} = ${result}`;
-      } catch {
-        return `无法计算: ${expression}`;
-      }
+    {
+        name: "calculate",
+        description: "数学计算",
+        execute: async (expression: string) => {
+            try {
+                // 安全起见，只允许简单数学运算
+                const result = Function(
+                    `"use strict"; return (${expression})`,
+                )();
+                console.log(`计算工具结果：${result}`);
+                return `${expression} = ${result}`;
+            } catch {
+                return `无法计算: ${expression}`;
+            }
+        },
     },
-  },
 ];
 
 // ---------- ReAct Prompt ----------
@@ -103,51 +105,57 @@ Thought: `);
 
 // ---------- 执行工具调用 ----------
 async function executeTool(toolName: string, input: string): Promise<string> {
-  const tool = tools.find((t) => t.name === toolName);
-  if (!tool) {
-    return `错误：找不到工具"${toolName}"`;
-  }
-  return await tool.execute(input);
+    const tool = tools.find((t) => t.name === toolName);
+    if (!tool) {
+        return `错误：找不到工具"${toolName}"`;
+    }
+    return await tool.execute(input);
 }
 
 // ---------- 解析并执行 ReAct 循环 ----------
-async function runReAct(question: string, maxSteps: number = 5): Promise<string> {
-  let context = "";
-  let step = 0;
+async function runReAct(
+    question: string,
+    maxSteps: number = 5,
+): Promise<string> {
+    let context = "";
+    let step = 0;
 
-  while (step < maxSteps) {
-    // 构建当前思考
-    const prompt = await reactPrompt.format({
-      tools: tools.map((t) => `${t.name}: ${t.description}`).join("\n"),
-      question,
-    });
+    while (step < maxSteps) {
+        // 构建当前思考
+        const prompt = await reactPrompt.format({
+            tools: tools.map((t) => `${t.name}: ${t.description}`).join("\n"),
+            question,
+        });
 
-    // 调用模型获取下一步
-    const response = await llm.invoke(prompt + context);
-    const text = typeof response.content === "string" ? response.content : String(response.content);
+        // 调用模型获取下一步
+        const response = await llm.invoke(prompt + context);
+        const text =
+            typeof response.content === "string"
+                ? response.content
+                : String(response.content);
 
-    // 检查是否有最终答案
-    if (text.includes("Final Answer:")) {
-      const finalAnswer = text.split("Final Answer:")[1].trim();
-      return finalAnswer;
+        // 检查是否有最终答案
+        if (text.includes("Final Answer:")) {
+            const finalAnswer = text.split("Final Answer:")[1].trim();
+            return finalAnswer;
+        }
+
+        // 解析 Action
+        const actionMatch = text.match(/Action:\s*(\w+)\[(.*?)\]/);
+        if (actionMatch) {
+            const [, toolName, input] = actionMatch;
+            const observation = await executeTool(toolName, input);
+
+            // 更新上下文
+            context += `\n${text}\nObservation: ${observation}`;
+            step++;
+        } else {
+            // 如果没有 Action，可能模型直接给出了答案
+            return text;
+        }
     }
 
-    // 解析 Action
-    const actionMatch = text.match(/Action:\s*(\w+)\[(.*?)\]/);
-    if (actionMatch) {
-      const [, toolName, input] = actionMatch;
-      const observation = await executeTool(toolName, input);
-
-      // 更新上下文
-      context += `\n${text}\nObservation: ${observation}`;
-      step++;
-    } else {
-      // 如果没有 Action，可能模型直接给出了答案
-      return text;
-    }
-  }
-
-  return "达到最大思考步骤，未能得出最终答案";
+    return "达到最大思考步骤，未能得出最终答案";
 }
 
 // ---------- 执行 ----------
