@@ -11,16 +11,19 @@ import { InMemoryChatMessageHistory } from "@langchain/core/chat_history";
 dotenv.config();
 
 const llm = new ChatOpenAI({
-  model: "qwen-plus",
-  apiKey: process.env.QWEN_API_KEY,
+  model: "deepseek-v4-flash",
+  apiKey: process.env.DEEPSEEK_API_KEY,
   temperature: 0.7,
   streamUsage: false,
+  timeout: 30000,
+  maxRetries: 2,
   configuration: {
-    baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    baseURL: "https://api.deepseek.com",
   },
 });
 
 // 向量模型（用于将文本转换为向量表示）
+// DeepSeek 暂不支持 embeddings，此处保留 Qwen 的 embeddings 配置
 const embeddings = new OpenAIEmbeddings({
   model: "text-embedding-v2",
   apiKey: process.env.QWEN_API_KEY,
