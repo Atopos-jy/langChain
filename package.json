@@ -8,6 +8,7 @@
     "dev:window": "tsx src/window-memory.ts",
     "dev:summary": "tsx src/summary-memory.ts",
     "dev:vector": "tsx src/vector-memory.ts",
+    "dev:server": "tsx src/server/index.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit"
   },
@@ -16,12 +17,15 @@
   "license": "ISC",
   "dependencies": {
     "@langchain/core": "^1.1.44",
+    "@langchain/langgraph": "^1.4.1",
     "@langchain/openai": "^1.4.5",
     "dotenv": "^17.4.2",
-    "langchain": "^1.4.0"
+    "langchain": "^1.4.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
